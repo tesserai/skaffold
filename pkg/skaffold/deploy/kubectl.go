@@ -326,27 +326,60 @@ func recursiveReplaceImage(i interface{}, replacements map[string]*replacement) 
 		}
 	case map[interface{}]interface{}:
 		for k, v := range t {
-			if k.(string) != "image" {
+			if k.(string) == "image" {
+				image := v.(string)
+				parsed, err := parseReference(image)
+				if err != nil {
+					logrus.Warnf("Couldn't parse image: %s", v)
+					continue
+				}
+
+				if parsed.fullyQualified {
+					// TODO(1.0.0): Remove this warning.
+					logrus.Infof("Not replacing fully qualified image: %s (see #565)", v)
+					continue
+				}
+
+				if img, present := replacements[parsed.baseName]; present {
+					t[k] = img.tag
+					img.found = true
+				}
+			} else {
+				if k.(string) == "env" && v.([]interface{}) != nil {
+					for _, elt := range v.([]interface{}) {
+						if elt.(map[interface{}]interface{}) == nil {
+							break
+						}
+
+						envVarEntry := elt.(map[interface{}]interface{})
+						envVarName := envVarEntry["name"].(string)
+						if envVarName == "" {
+							break
+						}
+
+						if strings.HasSuffix(envVarName, "_IMAGE") {
+							image := envVarEntry["value"].(string)
+							parsed, err := parseReference(image)
+							if err != nil {
+								logrus.Warnf("Couldn't parse image: %s", v)
+								continue
+							}
+
+							if parsed.fullyQualified {
+								// TODO(1.0.0): Remove this warning.
+								logrus.Infof("Not replacing fully qualified image: %s (see #565)", v)
+								continue
+							}
+
+							if img, present := replacements[parsed.baseName]; present {
+								envVarEntry["value"] = img.tag
+								img.found = true
+							}
+						}
+					}
+				}
 				recursiveReplaceImage(v, replacements)
 				continue
-			}
-
-			image := v.(string)
-			parsed, err := parseReference(image)
-			if err != nil {
-				logrus.Warnf("Couldn't parse image: %s", v)
-				continue
-			}
-
-			if parsed.fullyQualified {
-				// TODO(1.0.0): Remove this warning.
-				logrus.Infof("Not replacing fully qualified image: %s (see #565)", v)
-				continue
-			}
-
-			if img, present := replacements[parsed.baseName]; present {
-				t[k] = img.tag
-				img.found = true
 			}
 		}
 	}
