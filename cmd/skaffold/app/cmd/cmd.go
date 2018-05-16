@@ -18,8 +18,12 @@ package cmd
 
 import (
 	"io"
+	"log"
 
 	yaml "gopkg.in/yaml.v2"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/config"
 	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/constants"
@@ -36,6 +40,8 @@ var (
 	v         string
 	filename  string
 	overwrite bool
+	pprof     bool
+	pprofBind string
 )
 
 var rootCmd = &cobra.Command{
@@ -48,6 +54,13 @@ func NewSkaffoldCommand(out, err io.Writer) *cobra.Command {
 		if err := SetUpLogs(err, v); err != nil {
 			return err
 		}
+
+		if pprof {
+			go func() {
+				log.Println(http.ListenAndServe(pprofBind, nil))
+			}()
+		}
+
 		logrus.Infof("Skaffold %+v", version.Get())
 		return nil
 	}
@@ -59,6 +72,9 @@ func NewSkaffoldCommand(out, err io.Writer) *cobra.Command {
 	rootCmd.AddCommand(NewCmdBuild(out))
 	rootCmd.AddCommand(NewCmdFix(out))
 	rootCmd.AddCommand(NewCmdDocker(out))
+
+	rootCmd.PersistentFlags().BoolVarP(&pprof, "pprof", "", true, "Enable pprof HTTP serve")
+	rootCmd.PersistentFlags().StringVarP(&pprofBind, "pprof-bind", "", "localhost:6060", "Set bind address for pprof")
 
 	rootCmd.PersistentFlags().StringVarP(&v, "verbosity", "v", constants.DefaultLogLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
 	return rootCmd
