@@ -114,14 +114,26 @@ func getBuilder(cfg *v1alpha2.BuildConfig, kubeContext string) (build.Builder, e
 }
 
 func getDeployer(cfg *v1alpha2.DeployConfig, kubeContext string) (deploy.Deployer, error) {
-	if cfg.KubectlDeploy != nil {
-		return deploy.NewKubectlDeployer(cfg, kubeContext), nil
-	}
+	deployers := []deploy.Deployer{}
+
+	// HelmDeploy first, in case there are resources in Kubectl that depend on these...
 	if cfg.HelmDeploy != nil {
-		return deploy.NewHelmDeployer(cfg, kubeContext), nil
+		deployers = append(deployers, deploy.NewHelmDeployer(cfg, kubeContext))
 	}
 
-	return nil, fmt.Errorf("Unknown deployer for config %+v", cfg)
+	if cfg.KubectlDeploy != nil {
+		deployers = append(deployers, deploy.NewKubectlDeployer(cfg, kubeContext))
+	}
+
+	if len(deployers) == 0 {
+		return nil, fmt.Errorf("Unknown deployer for config %+v", cfg)
+	}
+
+	if len(deployers) == 1 {
+		return deployers[0], nil
+	}
+
+	return deploy.NewMultiDeployer(deployers), nil
 }
 
 func getTagger(t v1alpha2.TagPolicy, customTag string) (tag.Tagger, error) {
