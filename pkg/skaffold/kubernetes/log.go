@@ -71,7 +71,14 @@ func (a *LogAggregator) Start(ctx context.Context, client corev1.CoreV1Interface
 			select {
 			case <-ctx.Done():
 				return
-			case evt := <-watcher.ResultChan():
+			case evt, ok := <-watcher.ResultChan():
+				if !ok {
+					// Try reopening
+					logrus.Infof("Log aggregator watch has stopped, respawning it.")
+					a.Start(ctx, client)
+					break
+				}
+
 				if evt.Type != watch.Added && evt.Type != watch.Modified {
 					continue
 				}
