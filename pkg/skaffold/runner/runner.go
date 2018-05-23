@@ -261,10 +261,11 @@ func (r *SkaffoldRunner) watchBuildDeploy(ctx context.Context) error {
 	// Watch files and rebuild
 	g, watchCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return watcher.Start(watchCtx, onChange)
+		return watcher.Run(watchCtx, onChange)
 	})
+
 	g.Go(func() error {
-		return deployWatcher.Start(watchCtx, onDeployChange)
+		return deployWatcher.Run(watchCtx, onDeployChange)
 	})
 
 	return g.Wait()

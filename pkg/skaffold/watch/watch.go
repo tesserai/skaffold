@@ -34,9 +34,9 @@ type WatcherFactory func(paths []string) (Watcher, error)
 
 // Watcher provides a watch trigger for the skaffold pipeline to begin
 type Watcher interface {
-	// Start watches a set of files for changes, and calls `onChange`
+	// Run watches a set of files for changes, and calls `onChange`
 	// on each file change.
-	Start(ctx context.Context, onChange func([]string)) error
+	Run(ctx context.Context, onChange func([]string)) error
 }
 
 // fsWatcher uses inotify to watch for changes and implements
@@ -78,9 +78,9 @@ func NewWatcher(paths []string) (Watcher, error) {
 	}, nil
 }
 
-// Start watches a set of files for changes, and calls `onChange`
+// Run watches a set of files for changes, and calls `onChange`
 // on each file change.
-func (f *fsWatcher) Start(ctx context.Context, onChange func([]string)) error {
+func (f *fsWatcher) Run(ctx context.Context, onChange func([]string)) error {
 	changedPaths := map[string]bool{}
 
 	timer := time.NewTimer(1<<63 - 1) // Forever
