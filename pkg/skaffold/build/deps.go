@@ -32,6 +32,7 @@ import (
 type DependencyMap struct {
 	artifacts       []*v1alpha2.Artifact
 	pathToArtifacts map[string][]*v1alpha2.Artifact
+	artifactToPaths map[*v1alpha2.Artifact][]string
 }
 
 type DependencyResolver interface {
@@ -50,6 +51,10 @@ func (d *DependencyMap) Paths() []string {
 	return allPaths
 }
 
+func (d *DependencyMap) PathsForArtifact(artifact *v1alpha2.Artifact) []string {
+	return d.artifactToPaths[artifact]
+}
+
 func (d *DependencyMap) ArtifactsForPaths(paths []string) []*v1alpha2.Artifact {
 	m := map[*v1alpha2.Artifact]struct{}{}
 	for _, p := range paths {
@@ -66,13 +71,14 @@ func (d *DependencyMap) ArtifactsForPaths(paths []string) []*v1alpha2.Artifact {
 }
 
 func NewDependencyMap(artifacts []*v1alpha2.Artifact) (*DependencyMap, error) {
-	m, err := pathToArtifactMap(artifacts)
+	m, m2, err := pathToArtifactMap(artifacts)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating path to artifact map")
 	}
 	return &DependencyMap{
 		artifacts:       artifacts,
 		pathToArtifacts: m,
+		artifactToPaths: m2,
 	}, nil
 }
 
@@ -86,20 +92,24 @@ func isIgnored(path string) (bool, error) {
 	return false, nil
 }
 
-func pathToArtifactMap(artifacts []*v1alpha2.Artifact) (map[string][]*v1alpha2.Artifact, error) {
+func pathToArtifactMap(artifacts []*v1alpha2.Artifact) (map[string][]*v1alpha2.Artifact, map[*v1alpha2.Artifact][]string, error) {
 	m := map[string][]*v1alpha2.Artifact{}
+	m2 := map[*v1alpha2.Artifact][]string{}
+
 	for _, a := range artifacts {
 		paths, err := pathsForArtifact(a)
 		if err != nil {
-			return nil, errors.Wrapf(err, "getting paths for artifact %s", a.ImageName)
+			return nil, nil, errors.Wrapf(err, "getting paths for artifact %s", a.ImageName)
 		}
+
+		m2[a] = paths
 
 		for _, p := range paths {
 			m[p] = append(m[p], a)
 		}
 	}
 
-	return m, nil
+	return m, m2, nil
 }
 
 func pathsForArtifact(a *v1alpha2.Artifact) ([]string, error) {

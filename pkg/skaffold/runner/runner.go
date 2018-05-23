@@ -91,8 +91,8 @@ func NewForConfig(opts *config.SkaffoldOptions, cfg *config.SkaffoldConfig, out 
 		Tagger:         tagger,
 		opts:           opts,
 		kubeclient:     client,
-		WatcherFactory: watch.NewWatcher,
 		out:            out,
+		WatcherFactory: watch.NewWatchmanWatcher,
 	}, nil
 }
 
@@ -194,9 +194,13 @@ func (r *SkaffoldRunner) watchBuildDeploy(ctx context.Context) error {
 		return errors.Wrap(err, "getting path to dependency map")
 	}
 
-	watcher, err := r.WatcherFactory(r.depMap.Paths())
-	if err != nil {
-		return errors.Wrap(err, "creating watcher")
+	watchers := []watch.Watcher{}
+	for _, artifact := range artifacts {
+		watcher, err := r.WatcherFactory(artifact.Workspace, r.depMap.PathsForArtifact(artifact))
+		if err != nil {
+			return errors.Wrap(err, "creating watcher")
+		}
+		watchers = append(watchers, watcher)
 	}
 
 	deployDeps, err := r.Deployer.Dependencies()
@@ -205,7 +209,7 @@ func (r *SkaffoldRunner) watchBuildDeploy(ctx context.Context) error {
 	}
 	logrus.Infof("Deployer dependencies: %s", deployDeps)
 
-	deployWatcher, err := r.WatcherFactory(deployDeps)
+	deployWatcher, err := r.WatcherFactory("", deployDeps)
 	if err != nil {
 		return errors.Wrap(err, "creating deploy watcher")
 	}
@@ -260,10 +264,12 @@ func (r *SkaffoldRunner) watchBuildDeploy(ctx context.Context) error {
 
 	// Watch files and rebuild
 	g, watchCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		return watcher.Run(watchCtx, onChange)
-	})
-
+	for _, watcher := range watchers {
+		w := watcher
+		g.Go(func() error {
+			return w.Run(watchCtx, onChange)
+		})
+	}
 	g.Go(func() error {
 		return deployWatcher.Run(watchCtx, onDeployChange)
 	})
